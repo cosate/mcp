@@ -11,8 +11,8 @@
 #include "session.h"
 
 
-namespace cosate {
-namespace mcp_client {
+namespace mcp {
+namespace client {
 
 class ClientSession : public Session {
 public:

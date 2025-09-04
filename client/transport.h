@@ -4,8 +4,8 @@
 #include "../common/types.h"
 #include "http_client.h"
 
-namespace cosate {
-namespace mcp_client {
+namespace mcp {
+namespace client {
 
 class Transport {
 public:

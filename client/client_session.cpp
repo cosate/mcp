@@ -4,8 +4,8 @@
 
 #include "client_session.h"
 
-namespace cosate {
-namespace mcp_client {
+namespace mcp {
+namespace client {
 
 #define MCP_VERSION "2025-06-18";
 

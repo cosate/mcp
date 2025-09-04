@@ -3,8 +3,8 @@
 
 #include "../common/types.h"
 
-namespace cosate {
-namespace mcp_client {
+namespace mcp {
+namespace client {
 
 struct SSEResponse {
     std::string event;

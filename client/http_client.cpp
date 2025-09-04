@@ -1,5 +1,4 @@
 #include "http_client.h"
-#include "dtfbase/url.h"
 #include <curl/curl.h>
 #include <assert.h>
 
@@ -9,8 +8,8 @@
 #define ISSPACE(c) (c == ' ' || c == '\t' || c == '\r' || c == '\n')
 
 
-namespace cosate {
-namespace mcp_client {
+namespace mcp {
+namespace client {
 
 static size_t write_cb(void* contents, size_t size, size_t nmemb, void* userp) {
   size_t sizes = size * nmemb;
@@ -104,29 +103,152 @@ static size_t header_cb(void* buffer, size_t size, size_t nmemb, void* userp) {
 }
 
 static size_t debug_cb(CURL*, curl_infotype type, char* data, size_t size, void* user_data) {
-      if (auto completeInfo = reinterpret_cast<HttpRequestCompleteInfo*>(user_data)) {
-        switch (type) {
-          case CURLINFO_DATA_IN:
-            // Response body data
-            // completeInfo->trace.append("[RESPONSE_BODY] ");
-            // completeInfo->trace.append(data, size);
-            break;
-          case CURLINFO_DATA_OUT:
-            // Request body data
-            // completeInfo->trace.append("[REQUEST_BODY] ");
-            // completeInfo->trace.append(data, size);
-            break;
-          case CURLINFO_SSL_DATA_IN:
-          case CURLINFO_SSL_DATA_OUT:
-            break;
-          case CURLINFO_TEXT:
-          case CURLINFO_HEADER_IN:
-          case CURLINFO_HEADER_OUT:
-          case CURLINFO_END:
-          default:
-            completeInfo->trace.append(data, size);
-            break;
-        }
-      }
-      return 0;
-    };
+  if (auto completeInfo = reinterpret_cast<HttpRequestCompleteInfo*>(user_data)) {
+    switch (type) {
+      case CURLINFO_DATA_IN:
+        // Response body data
+        // completeInfo->trace.append("[RESPONSE_BODY] ");
+        // completeInfo->trace.append(data, size);
+        break;
+      case CURLINFO_DATA_OUT:
+        // Request body data
+        // completeInfo->trace.append("[REQUEST_BODY] ");
+        // completeInfo->trace.append(data, size);
+        break;
+      case CURLINFO_SSL_DATA_IN:
+      case CURLINFO_SSL_DATA_OUT:
+        break;
+      case CURLINFO_TEXT:
+      case CURLINFO_HEADER_IN:
+      case CURLINFO_HEADER_OUT:
+      case CURLINFO_END:
+      default:
+        completeInfo->trace.append(data, size);
+        break;
+    }
+  }
+  return 0;
+};
+
+HttpClient::HttpClient() {
+    CURLcode curlInitStatus = curl_global_init(CURL_GLOBAL_ALL);
+    if (curlInitStatus != 0) {
+        // FML_LOG(ERROR) << "curl_global_init failed, error: " << curlInitStatus;
+        assert(false);
+    }
+}
+
+HttpRequestCompleteInfo HttpClient::Get(HttpRequestParam param) {
+    HttpRequestCompleteInfo response;
+
+    CURL* curl_handle = curl_easy_init();
+
+    curl_easy_setopt(curl_handle, CURLOPT_URL, param.url.c_str());
+
+    struct curl_slist* headerlist = NULL;
+    for (auto item : param.headers) {
+        std::string head = item.first + ": " + item.second;
+        headerlist = curl_slist_append(headerlist, head.c_str());
+    }
+    curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headerlist);
+
+    curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
+    // curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
+  
+    curl_easy_setopt(curl_handle, CURLOPT_ACCEPT_ENCODING, "");
+
+    
+    curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT, 5L);
+
+    // 重要，mcp get请求param.timeout应当为0，表示永不超时
+    curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT_MS, param.timeout);
+
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb_sse);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, header_cb);
+    curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &response);
+
+    curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_DEBUGFUNCTION, debug_cb);
+    curl_easy_setopt(curl_handle, CURLOPT_DEBUGDATA, &response);
+
+    CURLcode code = curl_easy_perform(curl_handle);
+    if (code == 0) {
+        long http_status_code = 0;
+        curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_status_code);
+        response.code = http_status_code;
+        // FML_LOG(INFO) << "McpHttpClient::GET, http code: " << http_status_code;
+    } else {
+        // FML_LOG(ERROR) << "McpHttpClient::GET, curl error: " << code;
+        response.code = code;
+    }
+
+    // FML_LOG(INFO) << "HttpClient::GET trace: " << response.trace;
+
+    if (headerlist) {
+        curl_slist_free_all(headerlist);
+    }
+    return response;
+
+}
+
+HttpRequestCompleteInfo HttpClient::Post(HttpRequestParam param) {
+    HttpRequestCompleteInfo response;
+
+    CURL* curl_handle = curl_easy_init();
+
+    curl_easy_setopt(curl_handle, CURLOPT_URL, param.url.c_str());
+
+    struct curl_slist* headerlist = NULL;
+    for (auto item : param.headers) {
+        std::string head = item.first + ": " + item.second;
+        headerlist = curl_slist_append(headerlist, head.c_str());
+    }
+    curl_easy_setopt(curl_handle, CURLOPT_HTTPPOST, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headerlist);
+
+    curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, param.body.c_str());
+
+    curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
+    // curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
+
+    
+    curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT, 5L);
+    curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT_MS, param.timeout);
+
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, header_cb);
+    curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &response);
+
+    curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_DEBUGFUNCTION, debug_cb);
+    curl_easy_setopt(curl_handle, CURLOPT_DEBUGDATA, &response);
+
+
+    CURLcode code = curl_easy_perform(curl_handle);
+    if (code == 0) {
+        long http_status_code = 0;
+        curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_status_code);
+        response.code = http_status_code;
+        // FML_LOG(INFO) << "McpHttpClient::POST, http code: " << http_status_code;
+    } else {
+        // FML_LOG(ERROR) << "McpHttpClient::POST, curl error: " << code;
+        response.code = code;
+    }
+
+    // FML_LOG(INFO) << "HttpClient::POST trace: " << response.trace;
+
+    if (headerlist) {
+        curl_slist_free_all(headerlist);
+    }
+    return response;
+}
+
+} // namespace client
+} // namespace mcp

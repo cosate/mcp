@@ -78,8 +78,8 @@ void assign_json_value(nlohmann::json& j, const char* key, const T& value) {
         NLOHMANN_JSON_EXPAND(NLOHMANN_JSON_PASTE(NLOHMANN_JSON_FROM_OPTIONAL, __VA_ARGS__)) \
     }
 
-namespace cosate {
-namespace mcp_client {
+namespace mcp {
+namespace client {
 
 struct BaseMetaData {
     virtual ~BaseMetaData() = default;

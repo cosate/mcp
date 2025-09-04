@@ -5,8 +5,8 @@
 #include <map>
 #include <string>
 
-namespace cosate {
-namespace mcp_client {
+namespace mcp {
+namespace client {
 
 struct HttpRequestParam {
   /**

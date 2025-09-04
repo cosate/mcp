@@ -1,10 +1,11 @@
 #include <future>
 #include <chrono>
+#include <thread>
 
 #include "streamable_http_transport.h"
 
-namespace cosate {
-namespace mcp_client {
+namespace mcp {
+namespace client {
 
 StreamableHttpTransport::StreamableHttpTransport(std::string url, std::shared_ptr<HttpClient> client) : Transport() {
     mcp_server_url_ = url;
