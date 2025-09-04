@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <random>
 #include <chrono>
+#include <sstream>
 
 #include "client_session.h"
+#include "../third_party/spdlog/include/spdlog/spdlog.h"
 
 namespace mcp {
 namespace client {
@@ -59,7 +61,7 @@ InitializeResult ClientSession::Initialize() {
 
     auto sseResponse = SendRequest(request);
 
-    // FML_LOG(INFO) << "sse: " << sseResponse.back().data.dump();
+    spdlog::info("sse: {}", sseResponse.back().data.dump());
     try {
         if (sseResponse.size() == 0) {
             return InitializeResult();
@@ -79,11 +81,11 @@ InitializeResult ClientSession::Initialize() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
 
         auto tools = ListTools();
-        // FML_LOG(INFO) << "list_tools :" << nlohmann::json(tools).dump();
+        spdlog::info("list_tools : {}", nlohmann::json(tools).dump());
 
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return InitializeResult();
     }
 }
@@ -100,7 +102,10 @@ EmptyResult ClientSession::SendPing() {
         auto ret = response.result.get<EmptyResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return EmptyResult();
     }
 
@@ -119,7 +124,7 @@ ListToolsResult ClientSession::ListTools(const std::string& cursor) {
         auto ret = response.result.get<ListToolsResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return ListToolsResult();
     }
 
@@ -142,7 +147,7 @@ CallToolResult ClientSession::CallTool(const std::string& name,
         auto ret = response.result.get<CallToolResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return CallToolResult();
     }
 
@@ -163,7 +168,7 @@ ListResourcesResult ClientSession::ListResources(const std::string& cursor) {
         auto ret = response.result.get<ListResourcesResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return ListResourcesResult();
     }
 
@@ -182,7 +187,7 @@ ListResourceTemplatesResult ClientSession::ListResourceTemplates(const std::stri
         auto ret = response.result.get<ListResourceTemplatesResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return ListResourceTemplatesResult();
     }
 
@@ -203,7 +208,7 @@ ReadResourceResult ClientSession::ReadResource(const std::string& uri) {
         auto ret = response.result.get<ReadResourceResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return ReadResourceResult();
     }
 
@@ -223,7 +228,7 @@ EmptyResult ClientSession::SubscribeResource(const std::string& uri) {
         auto ret = response.result.get<EmptyResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return EmptyResult();
     }
 
@@ -243,7 +248,7 @@ EmptyResult ClientSession::UnsubscribeResource(const std::string& uri) {
         auto ret = response.result.get<EmptyResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return EmptyResult();
     }
 
@@ -265,7 +270,7 @@ ListPromptsResult ClientSession::ListPrompts(const std::string& cursor) {
         auto ret = response.result.get<ListPromptsResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return ListPromptsResult();
     }
 
@@ -286,7 +291,7 @@ GetPromptResult ClientSession::GetPrompt(const std::string& name,
         auto ret = response.result.get<GetPromptResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return GetPromptResult();
     }
 
@@ -318,7 +323,7 @@ CompleteResult ClientSession::Complete(const ResourceTemplateReference& ref,
         auto ret = response.result.get<CompleteResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return CompleteResult();
     }
 
@@ -350,7 +355,7 @@ CompleteResult ClientSession::Complete(const PromptReference& ref,
         auto ret = response.result.get<CompleteResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return CompleteResult();
     }
 
@@ -369,7 +374,7 @@ EmptyResult ClientSession::SetLoggingLevel(const std::string& level) {
         auto ret = response.result.get<EmptyResult>();
         return ret;
     } catch (const nlohmann::json::exception& e) {
-        // FML_LOG(ERROR) << "ClientSession::Initialize deserialize error: " << e.what();
+        spdlog::error("ClientSession::Initialize deserialize error: {}", e.what());
         return EmptyResult();
     }
 
@@ -449,7 +454,8 @@ void ClientSession::SendNotification(nlohmann::json notification) {
 
     auto response = transport_->SendMessage(notification, sessionId_);
 
-    // FML_LOG(INFO) << "response: " << response.body; 
+    spdlog::info("response: {}", response.body); 
+    spdlog::info("response: {}", response.body); 
 }
 
 template<typename T>
@@ -462,7 +468,7 @@ std::vector<SSEResponse> ClientSession::SendRequest(std::shared_ptr<T> request) 
 
     auto response = transport_->SendMessage(rpcRequest, sessionId_);
 
-    // FML_LOG(INFO) << "response: " << response.body; 
+    spdlog::info("response: {}", response.body); 
 
     std::string this_session_id = "";
     if (response.headers.find("mcp-session-id") != response.headers.end()) {
@@ -473,7 +479,7 @@ std::vector<SSEResponse> ClientSession::SendRequest(std::shared_ptr<T> request) 
     if (sessionId_.empty()) {
         sessionId_ = this_session_id;
     } else if (sessionId_ != this_session_id) {
-        // FML_LOG(ERROR) << "ClientSession::SendRequest error session_id, expected: " << sessionId_ << ", actual: " << this_session_id;
+        spdlog::info("ClientSession::SendRequest error session_id, expected: {}, actual: {}", sessionId_, this_session_id);
         return {};
     }
 
@@ -482,7 +488,7 @@ std::vector<SSEResponse> ClientSession::SendRequest(std::shared_ptr<T> request) 
         std::vector<SSEResponse> res = ParseSSEResponse(response.body);
         return res;
     } catch (const nlohmann::json::parse_error& e) {
-        // FML_LOG(ERROR) << "ClientSession::SendRequest json parse error: " << e.what();
+        spdlog::error("ClientSession::SendRequest json parse error: {}", e.what());
         return {};
     }
     return {};
@@ -528,7 +534,7 @@ std::vector<SSEResponse> ClientSession::ParseSSEResponse(std::string body) {
                 currentResponse.data = nlohmann::json::parse(data);
                 hasData = true;
             } catch (const nlohmann::json::parse_error& e) {
-                // FML_LOG(ERROR) << "ClientSession::ParseSSEResponse json parse error: " << e.what();
+                spdlog::error("ClientSession::ParseSSEResponse json parse error: {}", e.what());
             }
         }
     }

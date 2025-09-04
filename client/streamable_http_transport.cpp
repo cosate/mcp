@@ -3,6 +3,7 @@
 #include <thread>
 
 #include "streamable_http_transport.h"
+#include "../third_party/spdlog/include/spdlog/spdlog.h"
 
 namespace mcp {
 namespace client {
@@ -14,7 +15,7 @@ StreamableHttpTransport::StreamableHttpTransport(std::string url, std::shared_pt
 
 HttpRequestCompleteInfo StreamableHttpTransport::SendMessage(nlohmann::json request, std::string sessionId) {
     if (!httpClient_) {
-        // FML_LOG(ERROR) << "StreamableHttpTransport::SendMessage, httpClient null";
+        spdlog::error("StreamableHttpTransport::SendMessage, httpClient null");
         return {};
     }
 
@@ -33,7 +34,7 @@ HttpRequestCompleteInfo StreamableHttpTransport::SendMessage(nlohmann::json requ
     param.method = "POST";
     param.body = request.dump();
 
-    // FML_LOG(INFO) << "fanka_sse_send: " << param.body;
+    spdlog::info("fanka_sse_send: " + param.body);
 
     HttpRequestCompleteInfo response = httpClient_->Post(param);
 
@@ -42,7 +43,7 @@ HttpRequestCompleteInfo StreamableHttpTransport::SendMessage(nlohmann::json requ
 
 void StreamableHttpTransport::ListenNotification(std::string sessionId) {
     if (!httpClient_) {
-        // FML_LOG(ERROR) << "StreamableHttpTransport::ListenNotification, httpClient null";
+        spdlog::info("StreamableHttpTransport::ListenNotification, httpClient null");
         return;
     }
     HttpRequestParam param;
@@ -61,7 +62,7 @@ void StreamableHttpTransport::ListenNotification(std::string sessionId) {
     while (!stop_) {
         auto response = httpClient_->Get(param);
 
-        // FML_LOG(INFO) << "StreamableHttpTransport::ListenNotification get return";
+        spdlog::info("StreamableHttpTransport::ListenNotification get return");
 
         // 指数退避
         std::this_thread::sleep_for(std::chrono::milliseconds(retryMilliseconds_));
@@ -71,7 +72,7 @@ void StreamableHttpTransport::ListenNotification(std::string sessionId) {
         }
     }
 
-    // FML_LOG(INFO) << "StreamableHttpTransport::ListenNotification end";
+    spdlog::info("StreamableHttpTransport::ListenNotification end");
 }
 
 }

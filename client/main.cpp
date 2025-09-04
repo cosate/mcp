@@ -2,8 +2,10 @@
 #include "client_session.h"
 #include "http_client.h"
 #include "streamable_http_transport.h"
+#include "../third_party/spdlog/include/spdlog/spdlog.h"
 
-ienusing namespace mcp::client;
+using namespace mcp::client;
+
 
 int main() {
     auto httpClient = std::make_shared<HttpClient>();

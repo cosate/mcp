@@ -3,7 +3,7 @@
 
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -I../third_party/spdlog/include
 
 # Source files
 SRCS = $(wildcard *.cpp)
@@ -17,7 +17,7 @@ all: $(TARGET)
 
 # Link object files to create executable and clean up object files
 $(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $^
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lcurl
 	rm -f $(OBJS)
 
 # Compile source files to object files

@@ -2,6 +2,8 @@
 #include <curl/curl.h>
 #include <assert.h>
 
+#include "../third_party/spdlog/include/spdlog/spdlog.h"
+
 // extern "C" int Curl_isspace(int c);
 // #define ISSPACE(x) (Curl_isspace(static_cast<int>(static_cast<unsigned char>(x))))
 
@@ -25,7 +27,7 @@ static size_t write_cb_sse(void* contents, size_t size, size_t nmemb, void* user
   HttpRequestCompleteInfo* response = (HttpRequestCompleteInfo *)userp;
   response->body.append((char*)contents, sizes);
 
-//   FML_LOG(INFO) << "write_cb_sse: " << response->body;
+  spdlog::info("write_cb_sse: " + response->body);
   return sizes;
 }
 
@@ -133,7 +135,7 @@ static size_t debug_cb(CURL*, curl_infotype type, char* data, size_t size, void*
 HttpClient::HttpClient() {
     CURLcode curlInitStatus = curl_global_init(CURL_GLOBAL_ALL);
     if (curlInitStatus != 0) {
-        // FML_LOG(ERROR) << "curl_global_init failed, error: " << curlInitStatus;
+        spdlog::error("curl_global_init failed, error: " + curlInitStatus);
         assert(false);
     }
 }
@@ -180,13 +182,13 @@ HttpRequestCompleteInfo HttpClient::Get(HttpRequestParam param) {
         long http_status_code = 0;
         curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_status_code);
         response.code = http_status_code;
-        // FML_LOG(INFO) << "McpHttpClient::GET, http code: " << http_status_code;
+        spdlog::info("McpHttpClient::GET, http code: " + http_status_code);
     } else {
-        // FML_LOG(ERROR) << "McpHttpClient::GET, curl error: " << code;
+        spdlog::info("McpHttpClient::GET, curl error: " + code);
         response.code = code;
     }
 
-    // FML_LOG(INFO) << "HttpClient::GET trace: " << response.trace;
+    spdlog::info("HttpClient::GET trace: " + response.trace);
 
     if (headerlist) {
         curl_slist_free_all(headerlist);
@@ -236,13 +238,13 @@ HttpRequestCompleteInfo HttpClient::Post(HttpRequestParam param) {
         long http_status_code = 0;
         curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_status_code);
         response.code = http_status_code;
-        // FML_LOG(INFO) << "McpHttpClient::POST, http code: " << http_status_code;
+        spdlog::info("McpHttpClient::POST, http code: " + http_status_code);
     } else {
-        // FML_LOG(ERROR) << "McpHttpClient::POST, curl error: " << code;
+        spdlog::info("McpHttpClient::POST, curl error: " + code);
         response.code = code;
     }
 
-    // FML_LOG(INFO) << "HttpClient::POST trace: " << response.trace;
+    spdlog::info("HttpClient::POST trace: " + response.trace);
 
     if (headerlist) {
         curl_slist_free_all(headerlist);
