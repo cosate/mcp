@@ -1,0 +1,5 @@
+vi objs/Makefile
+
+add CXX = g++
+
+LINK $(CC) -> LINK $(CXX)

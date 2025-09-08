@@ -1,9 +1,10 @@
-#include <ngx_config.h>
-#include <ngx_core.h>
-#include <ngx_http.h>
-#include <ngx_log.h>
+extern "C" {
+    #include <ngx_config.h>
+    #include <ngx_core.h>
+    #include <ngx_http.h>
+}
 
-#include <string>
+#include <nlohmann/json/json.hpp>
 
 extern "C" {
     ngx_module_t ngx_http_mcp_module;
@@ -22,8 +23,9 @@ static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
     }
 
     try {
-        std::string body(reinterpret_cast<char*>(r->request_body->buf->pos),
-                         r->request_body->buf->last - r->request_body->buf->pos);
+        size_t body_len = r->request_body->buf->last - r->request_body->buf->pos;
+        std::string body(reinterpret_cast<char*>(r->request_body->buf->pos), body_len);
+
         json request = json::parse(body);
 
         json response;
@@ -40,8 +42,16 @@ static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
         r->headers_out.status = NGX_HTTP_OK;
         r->headers_out.content_length_n = res.len;
         ngx_http_send_header(r);
-        ngx_http_output_filter(r, ngx_list_push(&r->out));
-        return NGX_OK;
+
+        ngx_chain_t out;
+        out.buf = ngx_create_temp_buf(r->pool, res.len);
+        out.buf->pos = res.data;
+        out.buf->last = res.data + res.len;
+        out.buf->memory = 1;
+        out.buf->last_buf = 1;
+        out.next = nullptr;
+
+        return ngx_http_output_filter(r, &out);
     } catch (...) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "JSON parse error");
         return NGX_HTTP_BAD_REQUEST;
@@ -75,4 +85,3 @@ ngx_module_t ngx_http_mcp_module = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     NGX_MODULE_V1_PADDING
 };
-
