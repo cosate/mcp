@@ -6,11 +6,10 @@ extern "C" {
 
 #include <nlohmann/json/json.hpp>
 
-extern "C" {
-    ngx_module_t ngx_http_mcp_module;
-}
-
 using json = nlohmann::json;
+
+extern "C" {
+ngx_module_t ngx_http_mcp_module;
 
 static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
     if (r->method != NGX_HTTP_POST) {
@@ -85,3 +84,4 @@ ngx_module_t ngx_http_mcp_module = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     NGX_MODULE_V1_PADDING
 };
+}
