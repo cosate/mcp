@@ -79,7 +79,6 @@ void assign_json_value(nlohmann::json& j, const char* key, const T& value) {
     }
 
 namespace mcp {
-namespace client {
 
 struct BaseMetaData {
     virtual ~BaseMetaData() = default;
@@ -609,7 +608,6 @@ struct JSONRPCResponse {
 };
 
 
-}
 }
 
 #endif

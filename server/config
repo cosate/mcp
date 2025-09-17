@@ -1,6 +1,11 @@
 ngx_addon_name=ngx_http_mcp_module
 HTTP_MODULES="$HTTP_MODULES ngx_http_mcp_module"
-NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_http_mcp_module.cpp"
 
-CORE_INCS="$CORE_INCS $ngx_addon_dir/../third_party"
+# 分别添加源文件
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_http_mcp_module.cpp"
+NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/src/mcp_server.cpp"
+
+# 头文件与依赖目录
+CORE_INCS="$CORE_INCS $ngx_addon_dir/include $ngx_addon_dir $ngx_addon_dir/../third_party"
+
 NGX_ADDON_LIBS="$NGX_ADDON_LIBS -lstdc++ -lpthread"
