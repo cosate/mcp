@@ -12,3 +12,4 @@
 # server
 * 是一个nginx模块，需要编进nginx启动，还需优化
 * 自己下载nginx源码，修改build.sh中相应路径，执行
+* 增加按mcp method限流的逻辑
