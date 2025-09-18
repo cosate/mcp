@@ -188,15 +188,17 @@ static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
         }
     }
 
-    McpServer::MCPRequestVariant req_variant;
-    if (!McpServer::ngx_http_mcp_parse_request(request, logic_method, req_variant)) {
+    mcp::server::McpServer::MCPRequestVariant req_variant;
+    if (!mcp::server::McpServer::ngx_http_mcp_parse_request(
+            request, logic_method, req_variant, r->connection->log)) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "mcp unknown or parse-failed request method: %s", logic_method.c_str());
+                      "mcp unknown or parse-failed request method: %s",
+                      logic_method.c_str());
         r->headers_out.status = NGX_HTTP_BAD_REQUEST;
         ngx_http_send_header(r);
         return NGX_HTTP_BAD_REQUEST;
     }
-    // 可 std::visit(req_variant, ...) 做后续处理
+    // std::visit 可在此处理 req_variant
     nlohmann::json response;
     response["jsonrpc"] = "2.0";
     response["result"]  = std::string("Processed method: ") + logic_method;

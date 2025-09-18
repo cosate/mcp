@@ -6,6 +6,15 @@
 #include <nlohmann/json/json.hpp>
 #include "../../common/types.h"
 
+// 引入 Nginx 头，便于在实现中直接使用 ngx_log_error
+extern "C" {
+    #include <ngx_core.h>
+    #include <ngx_http.h>
+}
+
+namespace mcp {
+namespace server {
+
 class McpServer {
 public:
     using MCPRequestVariant = std::variant<
@@ -25,9 +34,14 @@ public:
         mcp::SetLevelRequest
     >;
 
+    // 仅保留解析函数 (内部直接使用 ngx_log_error)
     static bool ngx_http_mcp_parse_request(const nlohmann::json& j,
                                            const std::string& method,
-                                           MCPRequestVariant& out);
+                                           MCPRequestVariant& out,
+                                           ngx_log_t* log);
 };
+
+} // namespace server
+} // namespace mcp
 
 #endif
