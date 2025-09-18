@@ -2,6 +2,7 @@ extern "C" {
     #include <ngx_config.h>
     #include <ngx_core.h>
     #include <ngx_http.h>
+    #include <ngx_thread_pool.h>  // 需 nginx 编译启用 --with-threads
 }
 #include <nlohmann/json/json.hpp>
 #include <variant>
@@ -112,6 +113,83 @@ ngx_http_mcp_take_token(ngx_http_mcp_method_limit_t *ml) {
     return NGX_HTTP_TOO_MANY_REQUESTS;
 }
 
+// ========== 新增: 异步执行上下文与回调 ==========
+typedef struct {
+    ngx_http_request_t *r;
+    std::string        method;
+    mcp::server::McpServer::MCPRequestVariant req_variant;
+    std::string        result_json;  // 线程中生成
+    ngx_int_t          status;
+} ngx_http_mcp_async_ctx_t;
+
+static void ngx_http_mcp_thread_worker(void *data, ngx_log_t *log) {
+    auto *ctx = static_cast<ngx_http_mcp_async_ctx_t*>(data);
+    ctx->status = NGX_OK;
+    try {
+        // 业务处理 + JSON-RPC 封装
+        nlohmann::json result = mcp::server::McpServer::handle(ctx->req_variant, log);
+        nlohmann::json rpc;
+        rpc["jsonrpc"] = "2.0";
+        rpc["result"]  = std::move(result);
+        ctx->result_json = rpc.dump();
+    } catch (const std::exception &e) {
+        if (log) {
+            ngx_log_error(NGX_LOG_ERR, log, 0,
+                          "mcp async handle std::exception: %s (method=%s)",
+                          e.what(), ctx->method.c_str());
+        }
+        ctx->status = NGX_HTTP_INTERNAL_SERVER_ERROR;
+    } catch (...) {
+        if (log) {
+            ngx_log_error(NGX_LOG_ERR, log, 0,
+                          "mcp async handle unknown exception (method=%s)",
+                          ctx->method.c_str());
+        }
+        ctx->status = NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
+}
+
+static void ngx_http_mcp_thread_complete(ngx_event_t *ev) {
+    ngx_thread_task_t *task = static_cast<ngx_thread_task_t*>(ev->data);
+    auto *ctx = static_cast<ngx_http_mcp_async_ctx_t*>(task->ctx);
+    ngx_http_request_t *r = ctx->r;
+
+    if (ctx->status != NGX_OK) {
+        r->headers_out.status = (ctx->status > 0) ? ctx->status : NGX_HTTP_INTERNAL_SERVER_ERROR;
+        ngx_http_send_header(r);
+        ngx_http_finalize_request(r, ctx->status);
+        return;
+    }
+
+    ngx_str_t res;
+    res.len  = ctx->result_json.size();
+    res.data = static_cast<u_char*>(ngx_pnalloc(r->pool, res.len));
+    if (res.data == nullptr) {
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
+    ngx_memcpy(res.data, ctx->result_json.data(), res.len);
+
+    r->headers_out.status = NGX_HTTP_OK;
+    r->headers_out.content_length_n = res.len;
+    ngx_http_send_header(r);
+
+    ngx_chain_t out;
+    out.buf = ngx_create_temp_buf(r->pool, res.len);
+    if (out.buf == nullptr) {
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
+    ngx_memcpy(out.buf->pos, res.data, res.len);
+    out.buf->last = out.buf->pos + res.len;
+    out.buf->memory = 1;
+    out.buf->last_buf = 1;
+    out.next = nullptr;
+
+    ngx_http_output_filter(r, &out);
+    ngx_http_finalize_request(r, NGX_OK);
+}
+
 // 修改: 处理函数支持多方法
 static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
     ngx_http_mcp_loc_conf_t *conf =
@@ -152,7 +230,7 @@ static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
         return NGX_HTTP_BAD_REQUEST;
     }
 
-    // 限流（解析后才有 method）
+    // 限流
     ngx_str_t ms;
     ms.len = logic_method.size();
     ms.data = (u_char*)logic_method.data();
@@ -168,33 +246,62 @@ static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
         }
     }
 
-    // 调用统一处理，获取具体 result JSON
-    nlohmann::json result_json = mcp::server::McpServer::handle(req_variant, r->connection->log);
+    // ========== 改为异步调用 ==========
+    ngx_str_t tp_name = ngx_string("default");
+    ngx_thread_pool_t *tp = (ngx_cycle)
+        ? ngx_thread_pool_get((ngx_cycle_t*)ngx_cycle, &tp_name)
+        : nullptr;
+    if (tp == nullptr) {
+        // 回退同步（无线程池）
+        nlohmann::json result_json = mcp::server::McpServer::handle(req_variant, r->connection->log);
+        nlohmann::json rpc;
+        rpc["jsonrpc"] = "2.0";
+        rpc["result"] = std::move(result_json);
+        std::string resp = rpc.dump();
 
-    nlohmann::json rpc;
-    rpc["jsonrpc"] = "2.0";
-    rpc["result"] = std::move(result_json);
+        ngx_str_t res;
+        res.len  = resp.size();
+        res.data = (u_char*)resp.data();
 
-    std::string response_str = rpc.dump();
-    ngx_str_t res;
-    res.len = response_str.size();
-    res.data = (u_char*)response_str.data();
+        r->headers_out.status = NGX_HTTP_OK;
+        r->headers_out.content_length_n = res.len;
+        ngx_http_send_header(r);
 
-    r->headers_out.status = NGX_HTTP_OK;
-    r->headers_out.content_length_n = res.len;
-    ngx_http_send_header(r);
+        ngx_chain_t out;
+        out.buf = ngx_create_temp_buf(r->pool, res.len);
+        if (out.buf == nullptr) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        ngx_memcpy(out.buf->pos, res.data, res.len);
+        out.buf->last = out.buf->pos + res.len;
+        out.buf->memory = 1;
+        out.buf->last_buf = 1;
+        out.next = nullptr;
+        return ngx_http_output_filter(r, &out);
+    }
 
-    ngx_chain_t out;
-    out.buf = ngx_create_temp_buf(r->pool, res.len);
-    if (out.buf == NULL) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    ngx_thread_task_t *task = ngx_thread_task_alloc(r->pool, sizeof(ngx_http_mcp_async_ctx_t));
+    if (task == nullptr) {
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
+    auto *ctx = static_cast<ngx_http_mcp_async_ctx_t*>(task->ctx);
+    ctx->r = r;
+    ctx->method = logic_method;
+    ctx->req_variant = req_variant;
+    ctx->status = NGX_OK;
 
-    ngx_memcpy(out.buf->pos, res.data, res.len);
-    out.buf->last = out.buf->pos + res.len;
-    out.buf->memory = 1;
-    out.buf->last_buf = 1;
-    out.next = NULL;
+    task->handler = ngx_http_mcp_thread_worker;
+    task->event.handler = ngx_http_mcp_thread_complete;
+    task->event.data = task;
 
-    return ngx_http_output_filter(r, &out);
+    // 增加引用计数，异步完成后 finalize
+    r->main->count++;
+
+    if (ngx_thread_task_post(tp, task) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "mcp failed to post thread task");
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }
+
+    return NGX_DONE;
 }
 
 // 更新: create loc conf
