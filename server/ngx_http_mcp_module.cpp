@@ -121,58 +121,38 @@ static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
     }
 
     bool need_body = (r->method & (NGX_HTTP_POST | NGX_HTTP_PUT | NGX_HTTP_PATCH)) != 0;
-    if (need_body) {
-        ngx_int_t rc_rb = ngx_http_read_client_request_body(r, NULL);
-        if (rc_rb != NGX_OK && rc_rb != NGX_AGAIN) {
-            return rc_rb;
-        }
+    if (!need_body) {
+        // 当前协议要求 JSON body + method，非 body 方法直接拒绝
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "mcp request without body not supported");
+        return NGX_HTTP_BAD_REQUEST;
     }
 
-    nlohmann::json request;
-    bool has_json = false;
-    if (need_body && r->request_body && r->request_body->buf &&
-        r->request_body->buf->pos && r->request_body->buf->last > r->request_body->buf->pos) {
-        try {
-            size_t body_len = r->request_body->buf->last - r->request_body->buf->pos;
-            std::string body(reinterpret_cast<char*>(r->request_body->buf->pos), body_len);
-            request = nlohmann::json::parse(body);
-            has_json = true;
-        } catch (const std::exception &e) {
-            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                          "mcp json parse error: %s", e.what());
-            return NGX_HTTP_BAD_REQUEST;
-        } catch (...) {
-            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                          "mcp unknown json parse error");
-            return NGX_HTTP_BAD_REQUEST;
-        }
+    ngx_int_t rc_rb = ngx_http_read_client_request_body(r, NULL);
+    if (rc_rb != NGX_OK && rc_rb != NGX_AGAIN) {
+        return rc_rb;
     }
 
-    // 必须有 JSON 且包含顶层 "method" 为字符串
-    if (!has_json) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "mcp missing JSON body or body empty");
+    if (!r->request_body || !r->request_body->buf ||
+        !r->request_body->buf->pos || r->request_body->buf->last <= r->request_body->buf->pos) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "mcp empty body");
+        return NGX_HTTP_BAD_REQUEST;
+    }
+
+    size_t body_len = r->request_body->buf->last - r->request_body->buf->pos;
+    std::string body(reinterpret_cast<char*>(r->request_body->buf->pos), body_len);
+
+    // 解析 + 构建具体请求
+    mcp::server::McpServer::MCPRequestVariant req_variant;
+    std::string logic_method;
+    if (!mcp::server::McpServer::parse_body_and_build(
+            body, req_variant, logic_method, r->connection->log)) {
         r->headers_out.status = NGX_HTTP_BAD_REQUEST;
         ngx_http_send_header(r);
         return NGX_HTTP_BAD_REQUEST;
     }
 
-    auto it = request.find("method");
-    if (it == request.end()) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "mcp missing 'method' field");
-        r->headers_out.status = NGX_HTTP_BAD_REQUEST;
-        ngx_http_send_header(r);
-        return NGX_HTTP_BAD_REQUEST;
-    }
-    if (!it->is_string()) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "mcp 'method' field not a string");
-        r->headers_out.status = NGX_HTTP_BAD_REQUEST;
-        ngx_http_send_header(r);
-        return NGX_HTTP_BAD_REQUEST;
-    }
-
-    std::string logic_method = it->get<std::string>();
-
-    // 查找并执行限流
+    // 限流（解析后才有 method）
     ngx_str_t ms;
     ms.len = logic_method.size();
     ms.data = (u_char*)logic_method.data();
@@ -188,24 +168,14 @@ static ngx_int_t ngx_http_mcp_handler(ngx_http_request_t *r) {
         }
     }
 
-    mcp::server::McpServer::MCPRequestVariant req_variant;
-    if (!mcp::server::McpServer::ngx_http_mcp_parse_request(
-            request, logic_method, req_variant, r->connection->log)) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                      "mcp unknown or parse-failed request method: %s",
-                      logic_method.c_str());
-        r->headers_out.status = NGX_HTTP_BAD_REQUEST;
-        ngx_http_send_header(r);
-        return NGX_HTTP_BAD_REQUEST;
-    }
-    // std::visit 可在此处理 req_variant
-    nlohmann::json response;
-    response["jsonrpc"] = "2.0";
-    response["result"]  = std::string("Processed method: ") + logic_method;
-    // 如需调试输出具体类型，可启用（示例）：
-    // std::visit([&](auto const& req){ response["request_type"] = typeid(req).name(); }, req_variant);
+    // 调用统一处理，获取具体 result JSON
+    nlohmann::json result_json = mcp::server::McpServer::handle(req_variant, r->connection->log);
 
-    std::string response_str = response.dump();
+    nlohmann::json rpc;
+    rpc["jsonrpc"] = "2.0";
+    rpc["result"] = std::move(result_json);
+
+    std::string response_str = rpc.dump();
     ngx_str_t res;
     res.len = response_str.size();
     res.data = (u_char*)response_str.data();
