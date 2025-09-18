@@ -47,22 +47,53 @@ bool McpServer::ngx_http_mcp_parse_request(const nlohmann::json& j,
                                            MCPRequestVariant& out,
                                            ngx_log_t* log) {
     try {
-        if (method == "initialize")                     out = j.get<mcp::InitializeRequest>();
-        else if (method == "ping")                      out = j.get<mcp::PingRequest>();
-        else if (method == "tools/list")                out = j.get<mcp::ListToolsRequest>();
-        else if (method == "tools/call")                out = j.get<mcp::CallToolRequest>();
-        else if (method == "resources/list")            out = j.get<mcp::ListResourcesRequest>();
-        else if (method == "resources/templates/list")  out = j.get<mcp::ListResourceTemplatesRequest>();
-        else if (method == "resources/read")            out = j.get<mcp::ReadResourceRequest>();
-        else if (method == "resources/subscribe")       out = j.get<mcp::SubscribeRequest>();
-        else if (method == "resources/unsubscribe")     out = j.get<mcp::UnsubscribeRequest>();
-        else if (method == "prompts/list")              out = j.get<mcp::ListPromptsRequest>();
-        else if (method == "prompts/get")               out = j.get<mcp::GetPromptRequest>();
-        else if (method == "complete/fromResourceTemplate")
-                                                         out = j.get<mcp::CompleteRequest1>();
-        else if (method == "complete/fromPrompt")       out = j.get<mcp::CompleteRequest2>();
-        else if (method == "logging/setLevel")          out = j.get<mcp::SetLevelRequest>();
-        else return false;
+        switch (to_method_id(method)) {
+            case MCPMethodId::Initialize:
+                out = j.get<mcp::InitializeRequest>();
+                break;
+            case MCPMethodId::Ping:
+                out = j.get<mcp::PingRequest>();
+                break;
+            case MCPMethodId::ToolsList:
+                out = j.get<mcp::ListToolsRequest>();
+                break;
+            case MCPMethodId::ToolsCall:
+                out = j.get<mcp::CallToolRequest>();
+                break;
+            case MCPMethodId::ResourcesList:
+                out = j.get<mcp::ListResourcesRequest>();
+                break;
+            case MCPMethodId::ResourcesTemplatesList:
+                out = j.get<mcp::ListResourceTemplatesRequest>();
+                break;
+            case MCPMethodId::ResourcesRead:
+                out = j.get<mcp::ReadResourceRequest>();
+                break;
+            case MCPMethodId::ResourcesSubscribe:
+                out = j.get<mcp::SubscribeRequest>();
+                break;
+            case MCPMethodId::ResourcesUnsubscribe:
+                out = j.get<mcp::UnsubscribeRequest>();
+                break;
+            case MCPMethodId::PromptsList:
+                out = j.get<mcp::ListPromptsRequest>();
+                break;
+            case MCPMethodId::PromptsGet:
+                out = j.get<mcp::GetPromptRequest>();
+                break;
+            case MCPMethodId::CompleteFromResourceTemplate:
+                out = j.get<mcp::CompleteRequest1>();
+                break;
+            case MCPMethodId::CompleteFromPrompt:
+                out = j.get<mcp::CompleteRequest2>();
+                break;
+            case MCPMethodId::LoggingSetLevel:
+                out = j.get<mcp::SetLevelRequest>();
+                break;
+            case MCPMethodId::Unknown:
+            default:
+                return false;
+        }
         return true;
     } catch (const std::exception& e) {
         if (log) ngx_log_error(NGX_LOG_ERR, log, 0,
